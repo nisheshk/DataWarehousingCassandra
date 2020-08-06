@@ -1,6 +1,6 @@
 """
 Date: September 27, 2020
-Goal: Reads the data from cassandra and finds out the daily user count.
+Goal: Loads the data from cassandra and finds out the daily user count.
 """
 
 from    pyspark.sql import SparkSession
@@ -33,13 +33,14 @@ def read_from_cassandra(incremental_run, keyspace, table):
         logging.info('Read from_cassandra in progress')
         column_names = ["event_time","user_id"]
         if incremental_run:
-            #Get current week number
-            today_date = datetime.date.today()
-            year, week_num, day_of_week = today_date.isocalendar()
-
-            #Set condition to fetch the current week data by pushing down the predicate to reduce the number of entries
-            #retrived from the database. 
-            incremental_condition = (F.col("year") == year) & (F.col("week") == week_num)
+            #Logic yet to be written to find the starting timestamp of the current day and the next day.
+            today_starting_timestamp = None
+            next_day_starting_timestamp = None
+        
+            #Set condition to fetch the current day data by pushing down the predicate to reduce the number of entries
+            #retrived from the database.
+            incremental_condition = (F.col("year") == year) & (F.col("week") == week_num) & (F.col("event_time") >= today_starting_timestamp) & \
+                                    (F.col("event_time") < next_day_starting_timestamp)
 
             #Get the current week data from cassandra
             df=spark.read.format("org.apache.spark.sql.cassandra")\
@@ -49,8 +50,6 @@ def read_from_cassandra(incremental_run, keyspace, table):
                       .select(column_names)\
                       .where(incremental_condition)
 
-            #Filter and fetch the current day's data 
-            df = df.filter(day(df.event_time) == today_date.day)
         else:
             #Reds the entire data from the cassandra
             df=spark.read.format("org.apache.spark.sql.cassandra")\
