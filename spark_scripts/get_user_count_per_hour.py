@@ -1,6 +1,6 @@
 """
 Date: September 27, 2020
-Goal: Loads the data from cassandra and finds out the hourly user count.
+Goal: Reads the data from cassandra and finds out the hourly user count.
 """
 
 from    pyspark.sql import SparkSession
