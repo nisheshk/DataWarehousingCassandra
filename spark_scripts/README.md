@@ -24,4 +24,4 @@ spark-submit --conf spark.cassandra.connection.host=172.17.0.2 --conf spark.cass
 
 <b> Please make necessary configuration changes in the above spark-submit commands. Like cassandra host, mongodb host, appropriate spark connector.
 
-For further information about the scripts or even the entire project visit report.doc</b>
+For information about the project visit https://github.com/nisheshk/DataWarehousingCassandra/blob/master/report.docx</b>
