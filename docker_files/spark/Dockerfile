@@ -22,6 +22,7 @@ RUN apt-get update && \
 ENV JAVA_HOME /usr/lib/jvm/java-8-openjdk-amd64/
 RUN export JAVA_HOME
 
+RUN apt install git -y
 RUN apt install python3-pip -y
 RUN pip3 install virtualenv
 RUN virtualenv -p python3 venv
@@ -41,12 +42,12 @@ RUN tar -xzf spark-2.4.6-bin-hadoop2.7.tgz && \
     mv spark-2.4.6-bin-hadoop2.7 /spark && \
     rm spark-2.4.6-bin-hadoop2.7.tgz
 
+ENV SPARK_HOME /spark
+RUN export SPARK_HOME
 
 #Copy the shell script to the master and worker node
 COPY start-master.sh /start-master.sh
 COPY start-worker.sh /start-worker.sh
+COPY 1000_record_dataset.csv /input_file.csv
 
-#Copy cassandra connector
-COPY spark-cassandra-connector-2.4.0-s_2.11.jar /spark/jars
-
-
+RUN git clone https://github.com/nisheshk/DataWarehousingCassandra.git

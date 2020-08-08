@@ -24,9 +24,9 @@ def write_to_cassandra(df, table, keyspace):
 
             Returns
             --------
-    """
-     
-    df.write.format("org.apache.spark.sql.cassandra").mode('append').options(table=table, keyspace=keyspace)\
+     """
+
+     df.write.format("org.apache.spark.sql.cassandra").mode('append').options(table=table, keyspace=keyspace)\
         .option("inferSchema",'true')\
         .save()
 
