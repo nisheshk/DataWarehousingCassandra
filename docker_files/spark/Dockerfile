@@ -18,14 +18,19 @@ RUN apt-get update && \
     apt-get clean && \
     update-ca-certificates -f;
 
+RUN apt install software-properties-common
+RUN add-apt-repository ppa:deadsnakes/ppa
+RUN apt update
+
 # Setup JAVA_HOME -- useful for docker commandline
 ENV JAVA_HOME /usr/lib/jvm/java-8-openjdk-amd64/
 RUN export JAVA_HOME
 
 RUN apt install git -y
+RUN apt install python3.7 -y
 RUN apt install python3-pip -y
 RUN pip3 install virtualenv
-RUN virtualenv -p python3 venv
+RUN virtualenv -p /usr/bin/python3.7 venv
 ENV VIRTUAL_ENV /venv
 ENV PATH /venv/bin:$PATH
 RUN virtualenv env
@@ -50,4 +55,6 @@ COPY start-master.sh /start-master.sh
 COPY start-worker.sh /start-worker.sh
 COPY 1000_record_dataset.csv /input_file.csv
 
+RUN export PYSPARK_PYTHON=/usr/bin/python3.7
 RUN git clone https://github.com/nisheshk/DataWarehousingCassandra.git
+RUN pip3 install -r /DataWarehousingCassandra/spark_scripts/requirements.txt
