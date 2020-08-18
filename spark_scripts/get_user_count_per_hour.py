@@ -85,14 +85,14 @@ def get_user_count_by_hour(df):
             spark.sql('''
 
             with cte1 AS (
-            SELECT DATE(event_time) as date1, HOUR(event_time) as hour,
-                1 as count
+            SELECT
+                DATE(event_time) as date1, HOUR(event_time) as hour
             FROM df
                 GROUP BY
             user_id,DATE(event_time), HOUR(event_time)
             )
             SELECT to_timestamp(CONCAT(cast(date1 as string),"/",cast(hour as string),":00:00"), "yyyy-MM-dd/HH:mm:ss") as date,
-            YEAR(date1) as year, MONTH(date1) as month, DAY(date1) as day, hour, SUM(count) as count FROM cte1 GROUP BY date1,hour
+            YEAR(date1) as year, MONTH(date1) as month, DAY(date1) as day, hour, COUNT(*) as count FROM cte1 GROUP BY date1,hour
         ''')
     ##    result = result.withColumn("day",result["day"].cast(StringType()))
     ##    result = result.groupBy("year","month").agg(

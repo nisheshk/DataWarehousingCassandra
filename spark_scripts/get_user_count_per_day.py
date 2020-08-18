@@ -88,14 +88,13 @@ def get_user_count_by_day(df):
 
             with cte1 AS (
             SELECT
-                DATE(event_time) as date,
-                1 as count
+                DATE(event_time) as date
             FROM df
                 GROUP BY
             user_id,DATE(event_time)
             )
             SELECT date,YEAR(date) as year, MONTH(date) as month,
-                DAY(date) as day, SUM(count) as count FROM cte1 GROUP BY date
+                DAY(date) as day, COUNT(*) as count FROM cte1 GROUP BY date
         ''')
     ##    result = result.withColumn("day",result["day"].cast(StringType()))
     ##    result = result.groupBy("year","month").agg(
@@ -168,8 +167,6 @@ if __name__ == "__main__":
         spark = pyspark.sql.SparkSession.builder\
                 .appName('test-mongo')\
                 .master('local[*]')\
-                .config("spark.mongodb.input.uri", "mongodb://192.168.2.80:30002/") \
-                .config("spark.mongodb.output.uri", "mongodb://192.168.2.80:30002/") \
                 .getOrCreate()
 
         logging.info("Spark session created successfully")

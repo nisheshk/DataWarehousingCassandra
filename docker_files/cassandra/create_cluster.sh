@@ -4,7 +4,7 @@ sudo docker rm $(sudo docker ps -a | grep cassandra | awk {'print$1'})
 
 echo 'Creating first cassandra node'
 #Create a single instance
-sudo docker run --name my-cassandra-1 -m 1g -d cassandra:latest
+sudo docker run --network spark_spark-network --name my-cassandra-1 -m 1g -d cassandra:latest
 echo 'Creation of first cassandra node successful'
 sleep 5
 
