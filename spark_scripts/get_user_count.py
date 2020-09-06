@@ -1,6 +1,7 @@
 """
 Date: September 27, 2020
-Goal: Loads the data from cassandra and finds out the hourly user count.
+Goal: Extracts the data from cassandra and transforms the data to find daily and
+      hourly user count which is finally loaded into MongoDB.
 """
 
 from    pyspark.sql import SparkSession
@@ -11,7 +12,7 @@ import  os
 import  sys
 from    logger import logging
 import  argparse
-
+import  gc
 
 def read_from_cassandra(incremental_run, keyspace, table):
     """
@@ -21,29 +22,29 @@ def read_from_cassandra(incremental_run, keyspace, table):
 
         Parameters:
         -----------
-        incremental_run (int): Determines how data is to be read. 
+        incremental_run (int): Determines how data is to be read.
         keyspace (string): Cassandra keyspace from which data is to be read.
         table (string): Cassandra table inside the keyspace from which data is to be read.
 
         Returns
         --------
-        df (Dataframe): The dataframe obtained after reading from Cassandra 
+        df (Dataframe): The dataframe obtained after reading from Cassandra
     """
-    
+
     try:
-        logging.info('Read from_cassandra in progress')
-        column_names = ["event_time","user_id"]
         logging.info('Read from_cassandra in progress')
         column_names = ["event_time","user_id"]
         if incremental_run:
             #Logic yet to be written to find the starting timestamp of the current day and the next day.
             today_starting_timestamp = None
             next_day_starting_timestamp = None
-        
-            #Set condition to fetch the current day data by pushing down the predicate to reduce the number of entries
-            #retrived from the database.
-            incremental_condition = (F.col("year") == year) & (F.col("week") == week_num) & (F.col("event_time") >= today_starting_timestamp) & \
-                                    (F.col("event_time") < next_day_starting_timestamp)
+
+            #Set condition to fetch the current day data by pushing down the
+            #predicate to reduce the number of entries retrived from the database.
+            incremental_condition = \
+                (F.col("year") == year) & (F.col("week") == week_num) & \
+                (F.col("event_time") >= today_starting_timestamp) & \
+                (F.col("event_time") < next_day_starting_timestamp)
 
             df=spark.read.format("org.apache.spark.sql.cassandra")\
                       .option("spark.cassandra.connection.port", "9042").option("keyspace", keyspace)\
@@ -60,39 +61,52 @@ def read_from_cassandra(incremental_run, keyspace, table):
 
         logging.info('Dataframe loaded successfully')
         return df
-    
+
     except Exception as e:
         logging.error('Error in read_from_cassandra() function: {0}'.format(e))
         raise e
 
 def get_user_count_by_hour(df):
     """
-        This method finds out the hourly user count using the platform.
+        This method finds out the hourly user count using the e-commerce platform.
 
         Parameters:
         -----------
-        df (Dataframe): The dataframe obtained after reading from Cassandra 
+        df (Dataframe): The dataframe obtained after reading from Cassandra
 
         Returns
         --------
-        result (Dataframe): The dataframe with the daily user count.
+        result (Dataframe): The dataframe with the hourly user count.
     """
-    
+
     try:
         logging.info('Getting user count by hour in progress')
         df.createOrReplaceTempView('df')
         result = \
             spark.sql('''
 
-            with cte1 AS (
             SELECT
-                DATE(event_time) as date1, HOUR(event_time) as hour
-            FROM df
-                GROUP BY
-            user_id,DATE(event_time), HOUR(event_time)
+                DATE(event_time) as date1, HOUR(event_time) as hour, user_id
+            FROM
+                df
+            GROUP BY
+                user_id,DATE(event_time), HOUR(event_time)
+            '''
             )
-            SELECT to_timestamp(CONCAT(cast(date1 as string),"/",cast(hour as string),":00:00"), "yyyy-MM-dd/HH:mm:ss") as date,
-            YEAR(date1) as year, MONTH(date1) as month, DAY(date1) as day, hour, COUNT(*) as count FROM cte1 GROUP BY date1,hour
+
+        #Cached the df as it will be used again in get_user_count_by_day() function
+        cached_df = result.persist(pyspark.StorageLevel.MEMORY_AND_DISK)
+        result.createOrReplaceTempView('result')
+        result2 = spark.sql('''
+            SELECT
+                to_timestamp(CONCAT(cast(date1 as string),"/",
+                cast(hour as string),":00:00"), "yyyy-MM-dd/HH:mm:ss") as date,
+                YEAR(date1) as year, MONTH(date1) as month, DAY(date1) as day,
+                hour, COUNT(*) as count
+            FROM
+                result
+            GROUP BY
+                date1,hour
         ''')
     ##    result = result.withColumn("day",result["day"].cast(StringType()))
     ##    result = result.groupBy("year","month").agg(
@@ -101,11 +115,58 @@ def get_user_count_by_hour(df):
     ##        F.struct("day", "count"))).alias("user_count"))
     ##    return result
         logging.info('Got User count by hour successfully')
-        return result
-    
+        return cached_df, result2
+
     except Exception as e:
         logging.error('Error in get_user_count_by_hour() function: {0}'.format(e))
-        raise e 
+        raise e
+
+def get_user_count_by_day(cached_df):
+    """
+        This method finds out the daily user count using the platform.
+
+        Parameters:
+        -----------
+        df (Dataframe): The dataframe obtained after reading from Cassandra
+
+        Returns
+        --------
+        result (Dataframe): The dataframe with the daily user count.
+    """
+
+    try:
+        logging.info('Getting user count by hour in progress')
+        cached_df.createOrReplaceTempView('cached_df')
+        user_count_per_day_df = \
+                                spark.sql('''
+
+                                with cte1 AS (
+                                SELECT
+                                    date1 as date
+                                FROM
+                                    cached_df
+                                GROUP BY
+                                    user_id,date1
+                                )
+                                SELECT
+                                    date,YEAR(date) as year, MONTH(date) as month,
+                                    DAY(date) as day, COUNT(*) as count
+                                FROM
+                                    cte1
+                                GROUP BY date
+                            ''')
+    ##    result = result.withColumn("day",result["day"].cast(StringType()))
+    ##    result = result.groupBy("year","month").agg(
+    ##        F.map_from_entries(\
+    ##        F.collect_list(\
+    ##        F.struct("day", "count"))).alias("user_count"))
+    ##    return result
+        logging.info('Got User count by hour successfully')
+        return user_count_per_day_df
+
+    except Exception as e:
+        logging.error('Error in get_user_count_by_day() function: {0}'.format(e))
+        raise e
 
 def write_to_mongo(df, database, collection, incremental_run):
     """
@@ -147,13 +208,24 @@ if __name__ == "__main__":
         parser.add_argument("--cass_keyspace", help="keyspace")
         parser.add_argument("--cass_table", help="table")
         parser.add_argument("--mongo_db", help="Mongo db")
-        parser.add_argument("--mongo_collection", help="Mongo collection")
+        parser.add_argument("--mongo_daily_user_count_collection", \
+                                help="Mongo Daily User count collection name")
+        parser.add_argument("--mongo_hourly_user_count_collection", \
+                                help="Mongo Hourly user count collection name")
+
         parser.add_argument("--incremental_run", help="Full table load or incremental run")
-        
+
         args = parser.parse_args()
-        if not (args.cass_keyspace and args.cass_table and args.mongo_db and args.mongo_collection and args.incremental_run):
-            logging.error("Command line arguments are missing. Possibly --cass_keyspace --cass_table --mongo_db --mongo_collection --incremental_run ")
+        if not (args.cass_keyspace and args.cass_table and args.mongo_db and
+                args.mongo_hourly_user_count_collection and
+                args.mongo_daily_user_count_collection and
+                args.incremental_run):
+
+            logging.error("Command line arguments are missing. Possibly \
+                            --cass_keyspace --cass_table --mongo_db \
+                            --mongo_collection --incremental_run ")
             sys.exit()
+
         if args.incremental_run not in ['0','1']:
             logging.error("Incremental run should be either 0 or 1")
             sys.exit()
@@ -163,12 +235,30 @@ if __name__ == "__main__":
 
         #Spawn spark session
         spark = pyspark.sql.SparkSession.builder\
-                    .appName('test-mongo')\
+                    .appName('get-user-count-transformation')\
                     .master('local[*]')\
                     .getOrCreate()
         df = read_from_cassandra(incremental_run, args.cass_keyspace, args.cass_table)
-        total_user_per_hour_df = get_user_count_by_hour(df)
-        write_to_mongo(total_user_per_hour_df, args.mongo_db, args.mongo_collection, incremental_run)
+        df.persist(pyspark.StorageLevel.MEMORY_AND_DISK)
+
+        cached_df, user_count_per_hour_df = get_user_count_by_hour(df)
+        write_to_mongo(user_count_per_hour_df, args.mongo_db, \
+                args.mongo_hourly_user_count_collection, incremental_run)
+
+        del user_count_per_hour_df
+        gc.collect()
+
+        user_count_per_day_df = get_user_count_by_day(cached_df)
+        write_to_mongo(user_count_per_day_df, args.mongo_db, \
+                args.mongo_daily_user_count_collection, incremental_run)
+        cached_df.unpersist()
+        
+        while True:
+            a = input()
+            if int(a) == 3:
+                break
+        spark.stop()
+
 
     except Exception as e:
         logging.error('{0}'.format(e))

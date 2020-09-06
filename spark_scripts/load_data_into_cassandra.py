@@ -42,7 +42,7 @@ def read_csv_file(path):
             --------
             df (Dataframe): The dataframe contains data from .csv file
     """
-    
+
     df = spark.read.option("delimiter", ",").option('header','true').csv(path)
 
     #Conver the event_time field to timestamp
@@ -63,13 +63,13 @@ if __name__ == "__main__":
         fhandler.setFormatter(formatter)
         logger.addHandler(fhandler)
         logger.setLevel(logging.INFO)
-        
+
         parser = argparse.ArgumentParser()
         parser.add_argument("--cass_keyspace", help="keyspace")
         parser.add_argument("--cass_table", help="table")
         parser.add_argument("--incremental_run", help="Full table load or incremental run")
         parser.add_argument("--csv_file", help="input file")
-        
+
         #Parses the arugment provided from the command line.
         args = parser.parse_args()
         if not (args.cass_keyspace and args.cass_table and args.incremental_run and args.csv_file):
@@ -78,7 +78,7 @@ if __name__ == "__main__":
         if args.incremental_run not in ['0','1']:
             logging.error("Incremental run should be either 0 or 1")
             sys.exit()
-            
+
         incremental_run = int(args.incremental_run)
         #Spawn spark session
         spark = SparkSession.builder.appName("load-data-into-cassandra").getOrCreate()
@@ -88,7 +88,8 @@ if __name__ == "__main__":
 
         df = read_csv_file(args.csv_file)
         write_to_cassandra(df, args.cass_table, args.cass_keyspace)
-        
+        spark.stop()
+
     except Exception as e:
         logging.error('{0}'.format(e))
         sys.exit()
