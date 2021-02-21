@@ -14,7 +14,7 @@ from    ddl_script import create_user_info_table
 
 def write_to_cassandra(df, table, keyspace):
      """
-            This method reads the data to cassandra
+            This method reads the data from cassandra
 
             Parameters:
             -----------
