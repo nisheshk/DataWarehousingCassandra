@@ -11,7 +11,8 @@ def create_user_info_table(incremental_flag, keyspace, table, logger):
         This method create user_info table in Cassandra which contains the user behavior data.
         Parameters:
         -----------
-        incremental_flag (int): Determines if existing table needs to be destroyed so that the data is loaded again.
+        incremental_flag (int): Determines if existing table needs to be destroyed
+                                so that the data is loaded again.
         keyspace (string): Cassandra keyspace name
         table (string): Cassandra table name
 
@@ -22,10 +23,13 @@ def create_user_info_table(incremental_flag, keyspace, table, logger):
         logger.info("Create table in progress if incremental run is 0")
         cluster = Cluster(['172.17.0.2'])
         session = cluster.connect()
-        session.execute("CREATE KEYSPACE IF NOT EXISTS " + keyspace + " WITH replication = {'class':'SimpleStrategy', 'replication_factor' : 1};")
+        session.execute("CREATE KEYSPACE IF NOT EXISTS " + keyspace + " \
+                            WITH replication = {'class':'SimpleStrategy', \
+                            'replication_factor' : 2};")
         session.set_keyspace(keyspace)
 
-        #If incremental_flag == 0, means full table load, hence drops schema(and hence the data) and re-creates it.      
+        #If incremental_flag == 0, means full table load, hence drops
+        #schema(and hence the data) and re-creates it.
         if not incremental_flag: #Full table load
             session.execute("DROP TABLE IF EXISTS {0};".format(table))
             session.execute("""CREATE TABLE {0}(

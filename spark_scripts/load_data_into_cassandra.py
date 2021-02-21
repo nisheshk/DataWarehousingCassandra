@@ -26,7 +26,8 @@ def write_to_cassandra(df, table, keyspace):
             --------
      """
 
-     df.write.format("org.apache.spark.sql.cassandra").mode('append').options(table=table, keyspace=keyspace)\
+     df.write.format("org.apache.spark.sql.cassandra").mode('append')\
+        .options(table=table, keyspace=keyspace)\
         .option("inferSchema",'true')\
         .save()
 
@@ -46,9 +47,11 @@ def read_csv_file(path):
     df = spark.read.option("delimiter", ",").option('header','true').csv(path)
 
     #Conver the event_time field to timestamp
-    df = df.withColumn('event_time', to_timestamp(df['event_time'], format='yyyy-MM-dd HH:mm:ss z'))
+    df = df.withColumn('event_time', to_timestamp(df['event_time'], \
+         format='yyyy-MM-dd HH:mm:ss z'))
 
-    #Derive the field 'year' and 'week' as it serves as the partition key to the cassandra table.
+    #Derive the field 'year' and 'week' as it serves as the partition key
+    #to the cassandra table.
     df = df.withColumn('year',F.year(df.event_time))
     df = df.withColumn("week", F.date_format(F.col("event_time"), "w"))
     return df
@@ -58,8 +61,11 @@ if __name__ == "__main__":
     try:
         #Initializes logger
         logger = logging.getLogger()
-        fhandler = logging.FileHandler(filename='load_data_into_cassandra.log', mode='w')
-        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        fhandler = logging.FileHandler(filename='load_data_into_cassandra.log', \
+                                        mode='w')
+
+        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s -\
+                                       %(message)s')
         fhandler.setFormatter(formatter)
         logger.addHandler(fhandler)
         logger.setLevel(logging.INFO)
@@ -67,13 +73,16 @@ if __name__ == "__main__":
         parser = argparse.ArgumentParser()
         parser.add_argument("--cass_keyspace", help="keyspace")
         parser.add_argument("--cass_table", help="table")
-        parser.add_argument("--incremental_run", help="Full table load or incremental run")
+        parser.add_argument("--incremental_run", help="Full table load or \
+                             incremental run")
         parser.add_argument("--csv_file", help="input file")
 
         #Parses the arugment provided from the command line.
         args = parser.parse_args()
-        if not (args.cass_keyspace and args.cass_table and args.incremental_run and args.csv_file):
-            logging.error("Command line arguments are missing. Possibly --cass_keyspace --cass_table --csv_file --incremental_run ")
+        if not (args.cass_keyspace and args.cass_table and \
+                args.incremental_run and args.csv_file):
+            logging.error("Command line arguments are missing Possibly --cass_keyspace\
+                            --cass_table --csv_file --incremental_run ")
             sys.exit()
         if args.incremental_run not in ['0','1']:
             logging.error("Incremental run should be either 0 or 1")
@@ -81,10 +90,13 @@ if __name__ == "__main__":
 
         incremental_run = int(args.incremental_run)
         #Spawn spark session
-        spark = SparkSession.builder.appName("load-data-into-cassandra").getOrCreate()
+        spark =  SparkSession.builder\
+                .appName("load-data-into-cassandra")\
+                .getOrCreate()
 
         #Run DDL script for the table
-        create_user_info_table(incremental_run, args.cass_keyspace, args.cass_table, logger)
+        create_user_info_table(incremental_run, args.cass_keyspace, \
+                               args.cass_table, logger)
 
         df = read_csv_file(args.csv_file)
         write_to_cassandra(df, args.cass_table, args.cass_keyspace)
